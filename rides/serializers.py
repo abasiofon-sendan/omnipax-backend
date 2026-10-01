@@ -40,7 +40,7 @@ class PinSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = fields
 
-    def get_emergency_state(self, pin):
+    def get_emergency_state(self, pin) -> str:
         # none: no paid tip. paged: awaiting driver accept. reserved: accepted.
         # released: pages declined/expired, re-pageable. no_driver: paid but no
         # eligible driver has ever qualified.

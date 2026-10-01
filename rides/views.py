@@ -1,4 +1,5 @@
 from django.core.exceptions import ValidationError
+from drf_spectacular.utils import extend_schema
 from rest_framework import status
 from rest_framework.generics import get_object_or_404
 from rest_framework.response import Response
@@ -21,6 +22,9 @@ def pin_error(exc):
 
 
 class PinCreateView(APIView):
+    serializer_class = PinCreateSerializer
+
+    @extend_schema(request=PinCreateSerializer, responses=PinSerializer, tags=["pins"])
     def post(self, request):
         serializer = PinCreateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -32,6 +36,9 @@ class PinCreateView(APIView):
 
 
 class ActivePinView(APIView):
+    serializer_class = PinSerializer
+
+    @extend_schema(request=None, responses=PinSerializer, tags=["pins"])
     def get(self, request):
         pin = (
             Pin.objects.filter(
@@ -49,6 +56,9 @@ class ActivePinView(APIView):
 
 
 class PinCancelView(APIView):
+    serializer_class = PinSerializer
+
+    @extend_schema(request=None, responses=PinSerializer, tags=["pins"])
     def post(self, request, pin_id):
         pin = get_object_or_404(Pin, id=pin_id, passenger=request.user)
         if pin.status != Pin.Status.ACTIVE:
@@ -66,6 +76,9 @@ class PinCancelView(APIView):
 
 
 class PinStatusView(APIView):
+    serializer_class = PinSerializer
+
+    @extend_schema(request=None, responses=PinSerializer, tags=["pins"])
     def get(self, request, pin_id):
         pin = get_object_or_404(Pin, id=pin_id, passenger=request.user)
         return Response(PinSerializer(pin).data)

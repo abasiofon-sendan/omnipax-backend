@@ -5,6 +5,8 @@ GET /api/health/ and alert on anything but HTTP 200 {"status": "ok"}.
 """
 
 from django.db import connection
+from drf_spectacular.types import OpenApiTypes
+from drf_spectacular.utils import extend_schema
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -14,6 +16,9 @@ class HealthView(APIView):
     permission_classes = [AllowAny]
     authentication_classes = []
 
+    @extend_schema(
+        request=None, responses=OpenApiTypes.OBJECT, tags=["health"], auth=[]
+    )
     def get(self, request):
         checks = {}
         try:

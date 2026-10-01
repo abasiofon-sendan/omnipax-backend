@@ -3,7 +3,9 @@ import hmac
 import json
 
 from django.conf import settings
-from rest_framework import status
+from drf_spectacular.types import OpenApiTypes
+from drf_spectacular.utils import extend_schema
+from rest_framework import serializers, status
 from rest_framework.generics import get_object_or_404
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
@@ -15,9 +17,20 @@ from .models import Tip
 from .services import confirm_payment_by_reference, initiate_tip
 
 
+class TipInitiateSerializer(serializers.Serializer):
+    amount = serializers.DecimalField(
+        max_digits=10, decimal_places=2, required=False, allow_null=True
+    )
+
+
 class TipInitiateView(APIView):
     """POST /api/pins/{id}/tip/. Passenger-only (own pin)."""
 
+    serializer_class = TipInitiateSerializer
+
+    @extend_schema(
+        request=TipInitiateSerializer, responses=OpenApiTypes.OBJECT, tags=["payments"]
+    )
     def post(self, request, pin_id):
         pin = get_object_or_404(Pin, id=pin_id, passenger=request.user)
         if pin.status == Pin.Status.RESERVED:
@@ -50,7 +63,11 @@ class BachsWebhookView(APIView):
 
     permission_classes = [AllowAny]
     authentication_classes = []
+    serializer_class = TipInitiateSerializer
 
+    @extend_schema(
+        request=OpenApiTypes.OBJECT, responses=OpenApiTypes.OBJECT, tags=["payments"]
+    )
     def post(self, request):
         secret = getattr(settings, "BACHS_WEBHOOK_SECRET", "") or ""
         if not secret:

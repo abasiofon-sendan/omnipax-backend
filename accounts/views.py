@@ -6,6 +6,8 @@ from django.contrib.auth import authenticate
 from django.core.mail import send_mail
 from django.db import transaction
 from django.utils import timezone
+from drf_spectacular.types import OpenApiTypes
+from drf_spectacular.utils import extend_schema
 from rest_framework import serializers, status
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
@@ -83,7 +85,11 @@ class LoginSerializer(serializers.Serializer):
 
 class SignupView(APIView):
     permission_classes = [AllowAny]
+    serializer_class = SignupSerializer
 
+    @extend_schema(
+        request=SignupSerializer, responses=OpenApiTypes.OBJECT, tags=["auth"]
+    )
     def post(self, request):
         serializer = SignupSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -102,7 +108,11 @@ class SignupView(APIView):
 
 class OTPRequestView(APIView):
     permission_classes = [AllowAny]
+    serializer_class = OTPRequestSerializer
 
+    @extend_schema(
+        request=OTPRequestSerializer, responses=OpenApiTypes.OBJECT, tags=["auth"]
+    )
     def post(self, request):
         serializer = OTPRequestSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -118,7 +128,11 @@ class OTPRequestView(APIView):
 
 class OTPVerifyView(APIView):
     permission_classes = [AllowAny]
+    serializer_class = OTPVerifySerializer
 
+    @extend_schema(
+        request=OTPVerifySerializer, responses=OpenApiTypes.OBJECT, tags=["auth"]
+    )
     def post(self, request):
         serializer = OTPVerifySerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -165,7 +179,11 @@ class OTPVerifyView(APIView):
 
 class LoginView(APIView):
     permission_classes = [AllowAny]
+    serializer_class = LoginSerializer
 
+    @extend_schema(
+        request=LoginSerializer, responses=OpenApiTypes.OBJECT, tags=["auth"]
+    )
     def post(self, request):
         serializer = LoginSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)

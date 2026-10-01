@@ -25,6 +25,10 @@ class OnlineToggleSerializer(serializers.Serializer):
     is_online = serializers.BooleanField()
 
 
+class PinCompleteSerializer(serializers.Serializer):
+    pickup_code = serializers.CharField()
+
+
 class DriverProfileSerializer(serializers.ModelSerializer):
     class Meta:
         model = DriverProfile

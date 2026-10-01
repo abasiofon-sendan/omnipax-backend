@@ -1,5 +1,7 @@
 from django.db import transaction
 from django.utils import timezone
+from drf_spectacular.types import OpenApiTypes
+from drf_spectacular.utils import extend_schema
 from rest_framework import status
 from rest_framework.permissions import BasePermission
 from rest_framework.response import Response
@@ -21,6 +23,7 @@ from .serializers import (
     DriverVerifySerializer,
     LocationSerializer,
     OnlineToggleSerializer,
+    PinCompleteSerializer,
 )
 from .visibility import junction_heatmap
 
@@ -43,6 +46,13 @@ class DriverRegisterView(APIView):
     the phone on the User, only profile fields are needed here.)
     """
 
+    serializer_class = DriverRegisterSerializer
+
+    @extend_schema(
+        request=DriverRegisterSerializer,
+        responses=DriverProfileSerializer,
+        tags=["drivers"],
+    )
     def post(self, request):
         if hasattr(request.user, "driver_profile"):
             return Response(
@@ -79,7 +89,13 @@ class DriverVerifyView(APIView):
     """Admin-only: manual approval queue (pluggable strategy, spec §8)."""
 
     permission_classes = [IsAdminRole]
+    serializer_class = DriverVerifySerializer
 
+    @extend_schema(
+        request=DriverVerifySerializer,
+        responses=DriverProfileSerializer,
+        tags=["drivers"],
+    )
     def post(self, request):
         serializer = DriverVerifySerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -105,7 +121,13 @@ class LocationHeartbeatView(APIView):
     """Upsert current location. Clients call every 15-30s while online."""
 
     permission_classes = [IsDriverRole]
+    serializer_class = LocationSerializer
 
+    @extend_schema(
+        request=LocationSerializer,
+        responses=DriverLocationSerializer,
+        tags=["drivers"],
+    )
     def post(self, request):
         serializer = LocationSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -137,7 +159,13 @@ class LocationHeartbeatView(APIView):
 
 class OnlineToggleView(APIView):
     permission_classes = [IsDriverRole]
+    serializer_class = OnlineToggleSerializer
 
+    @extend_schema(
+        request=OnlineToggleSerializer,
+        responses=DriverProfileSerializer,
+        tags=["drivers"],
+    )
     def post(self, request):
         serializer = OnlineToggleSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -157,7 +185,9 @@ class ZonesView(APIView):
     """Primary driver interface: ranked top-3 + full heatmap demand array."""
 
     permission_classes = [IsDriverRole]
+    serializer_class = DriverLocationSerializer
 
+    @extend_schema(request=None, responses=OpenApiTypes.OBJECT, tags=["drivers"])
     def get(self, request):
         return Response(junction_heatmap())
 
@@ -166,7 +196,9 @@ class DriverPinsView(APIView):
     """NOT a request inbox: pins this driver was alerted to / may complete."""
 
     permission_classes = [IsDriverRole]
+    serializer_class = PinSerializer
 
+    @extend_schema(request=None, responses=PinSerializer(many=True), tags=["drivers"])
     def get(self, request):
         try:
             profile = request.user.driver_profile
@@ -216,7 +248,9 @@ class PinAcceptView(APIView):
     """Paged driver accepts within the deadline → pin `reserved`."""
 
     permission_classes = [IsDriverRole]
+    serializer_class = PinSerializer
 
+    @extend_schema(request=None, responses=PinSerializer, tags=["drivers"])
     def post(self, request, pin_id):
         profile, err = _driver_profile_or_400(request)
         if err:
@@ -273,7 +307,9 @@ class PinDeclineView(APIView):
     """Paged driver declines → reservation released, pin back to `active`."""
 
     permission_classes = [IsDriverRole]
+    serializer_class = PinSerializer
 
+    @extend_schema(request=None, responses=PinSerializer, tags=["drivers"])
     def post(self, request, pin_id):
         profile, err = _driver_profile_or_400(request)
         if err:
@@ -301,7 +337,11 @@ class PinCompleteView(APIView):
     visibility-set members only. Wrong codes rate-limited per pin."""
 
     permission_classes = [IsDriverRole]
+    serializer_class = PinCompleteSerializer
 
+    @extend_schema(
+        request=PinCompleteSerializer, responses=PinSerializer, tags=["drivers"]
+    )
     def post(self, request, pin_id):
         import hmac
 
