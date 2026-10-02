@@ -24,7 +24,11 @@ class DriverProfile(models.Model):
     vehicle_type = models.CharField(max_length=20, choices=VehicleType.choices)
     plate_number = models.CharField(max_length=32)
     approved_corridor = models.ForeignKey(
-        Corridor, on_delete=models.PROTECT, related_name="drivers"
+        Corridor,
+        on_delete=models.PROTECT,
+        related_name="drivers",
+        null=True,
+        blank=True,
     )
     verification_status = models.CharField(
         max_length=20,

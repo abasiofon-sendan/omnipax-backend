@@ -7,7 +7,7 @@ class DriverRegisterSerializer(serializers.Serializer):
     registration_id = serializers.CharField(max_length=64)
     vehicle_type = serializers.ChoiceField(choices=["keke", "minibus"])
     plate_number = serializers.CharField(max_length=32)
-    approved_corridor_id = serializers.UUIDField()
+    approved_corridor_id = serializers.UUIDField(required=False, allow_null=True)
 
 
 class DriverVerifySerializer(serializers.Serializer):

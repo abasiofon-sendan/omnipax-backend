@@ -61,15 +61,16 @@ class DriverRegisterView(APIView):
             )
         serializer = DriverRegisterSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        try:
-            corridor = Corridor.objects.get(
-                id=serializer.validated_data["approved_corridor_id"], is_active=True
-            )
-        except Corridor.DoesNotExist:
-            return Response(
-                {"detail": "Unknown or inactive corridor."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+        corridor = None
+        corridor_id = serializer.validated_data.get("approved_corridor_id")
+        if corridor_id is not None:
+            try:
+                corridor = Corridor.objects.get(id=corridor_id, is_active=True)
+            except Corridor.DoesNotExist:
+                return Response(
+                    {"detail": "Unknown or inactive corridor."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
         with transaction.atomic():
             profile = DriverProfile.objects.create(
                 user=request.user,

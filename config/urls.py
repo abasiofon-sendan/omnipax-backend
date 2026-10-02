@@ -30,6 +30,7 @@ urlpatterns = [
     path('api/', include('core.urls')),
     path('api/auth/', include('accounts.urls')),
     path('api/admin/', include('geo.urls')),
+    path('api/', include('geo.public_urls')),
     path('api/pins/', include('rides.urls')),
     path('api/driver/', include('drivers.urls')),
     path('api/payments/', include('payments.urls')),

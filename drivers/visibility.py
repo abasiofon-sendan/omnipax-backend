@@ -27,12 +27,16 @@ def fresh_cutoff():
 
 def _ranked_candidates(junction, corridor_id):
     """(profile, distance_m) sorted nearest-first for online + verified drivers
-    in `corridor_id` with a fresh location."""
+    with a fresh location. Drivers with no approved corridor are eligible
+    everywhere; drivers with one are scoped to that corridor."""
+    from django.db.models import Q
+
     candidates = []
     profiles = DriverProfile.objects.filter(
+        Q(approved_corridor_id=corridor_id)
+        | Q(approved_corridor__isnull=True),
         is_online=True,
         verification_status=DriverProfile.VerificationStatus.VERIFIED,
-        approved_corridor_id=corridor_id,
         location__recorded_at__gte=fresh_cutoff(),
     ).select_related("location")
     for profile in profiles:
