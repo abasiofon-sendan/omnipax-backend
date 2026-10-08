@@ -174,6 +174,9 @@ EMAIL_PORT = int(os.environ.get("EMAIL_PORT", "587"))
 EMAIL_HOST_USER = os.environ.get("EMAIL_HOST_USER", "")
 EMAIL_HOST_PASSWORD = os.environ.get("EMAIL_HOST_PASSWORD", "")
 EMAIL_USE_TLS = os.environ.get("EMAIL_USE_TLS", "1") == "1"
+# Cap the SMTP handshake so a blocked/mute mail server can never hang a
+# gunicorn sync worker long enough to trip WORKER TIMEOUT.
+EMAIL_TIMEOUT = int(os.environ.get("EMAIL_TIMEOUT", "15"))
 DEFAULT_FROM_EMAIL = os.environ.get("DEFAULT_FROM_EMAIL", "no-reply@omnipax.local")
 
 # --- Bachs (tip payments; sandbox stub unless BACHS_API_URL is set) ---
