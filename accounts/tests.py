@@ -1,3 +1,6 @@
+import smtplib
+from unittest.mock import patch
+
 from django.test import TestCase
 from rest_framework.test import APIClient
 
@@ -92,3 +95,57 @@ class AuthFlowTests(TestCase):
         self.assertEqual(self.signup().status_code, 201)
         res = self.signup()
         self.assertEqual(res.status_code, 400)
+
+
+class MailUnavailableTests(TestCase):
+    """Mail server down must be a clear 503, never a 500."""
+
+    def setUp(self):
+        self.client = APIClient()
+        self.signup_payload = {
+            "email": "rider@example.com",
+            "phone_number": "+2348012345678",
+            "password": "strongpass1",
+        }
+
+    @patch(
+        "accounts.views.send_mail",
+        side_effect=ConnectionRefusedError("[Errno 111] Connection refused"),
+    )
+    def test_signup_returns_503_and_leaves_no_partial_user(self, mocked):
+        res = self.client.post(
+            "/api/auth/signup/", self.signup_payload, format="json"
+        )
+        self.assertEqual(res.status_code, 503)
+        self.assertIn("detail", res.data)
+        self.assertEqual(User.objects.filter(email="rider@example.com").count(), 0)
+        self.assertEqual(OTPVerification.objects.count(), 0)
+
+    @patch(
+        "accounts.views.send_mail",
+        side_effect=smtplib.SMTPAuthenticationError(535, b"5.7.8 Authentication failed"),
+    )
+    def test_signup_returns_503_on_smtp_auth_failure(self, mocked):
+        res = self.client.post(
+            "/api/auth/signup/", self.signup_payload, format="json"
+        )
+        self.assertEqual(res.status_code, 503)
+        self.assertEqual(User.objects.count(), 0)
+
+    @patch(
+        "accounts.views.send_mail",
+        side_effect=ConnectionRefusedError("[Errno 111] Connection refused"),
+    )
+    def test_otp_request_returns_503_and_keeps_rate_budget(self, mocked):
+        url = "/api/auth/otp/request/"
+        res = self.client.post(url, {"email": "rider@example.com"}, format="json")
+        self.assertEqual(res.status_code, 503)
+        self.assertEqual(OTPVerification.objects.count(), 0)
+
+    def test_signup_succeeds_when_mail_works(self):
+        with patch("accounts.views.send_mail") as mocked:
+            res = self.client.post(
+                "/api/auth/signup/", self.signup_payload, format="json"
+            )
+        self.assertEqual(res.status_code, 201)
+        mocked.assert_called_once()

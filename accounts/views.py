@@ -1,5 +1,7 @@
 import hmac
+import logging
 import secrets
+import smtplib
 
 from django.conf import settings
 from django.contrib.auth import authenticate
@@ -16,6 +18,12 @@ from rest_framework_simplejwt.tokens import RefreshToken
 
 from .models import OTPVerification, User
 
+logger = logging.getLogger(__name__)
+
+
+class EmailDeliveryError(Exception):
+    """The mail server could not be reached or rejected the message."""
+
 
 def tokens_for_user(user):
     refresh = RefreshToken.for_user(user)
@@ -27,12 +35,25 @@ def generate_otp_code():
 
 
 def send_otp_email(email, code):
-    send_mail(
-        subject="Your Omnipax verification code",
-        message=f"Your Omnipax verification code is {code}. It expires in 5 minutes.",
-        from_email=settings.DEFAULT_FROM_EMAIL,
-        recipient_list=[email],
-        fail_silently=False,
+    try:
+        send_mail(
+            subject="Your Omnipax verification code",
+            message=f"Your Omnipax verification code is {code}. It expires in 5 minutes.",
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            recipient_list=[email],
+            fail_silently=False,
+        )
+    except (OSError, smtplib.SMTPException) as exc:
+        logger.exception("OTP email delivery failed for %s", email)
+        raise EmailDeliveryError(str(exc)) from exc
+
+
+def otp_delivery_unavailable():
+    """503 instead of a 500 when the mail server is unreachable/rejecting."""
+    return Response(
+        {"detail": "Couldn't send the verification email. Try again shortly."},
+        status=status.HTTP_503_SERVICE_UNAVAILABLE,
+        headers={"Retry-After": "30"},
     )
 
 
@@ -93,13 +114,17 @@ class SignupView(APIView):
     def post(self, request):
         serializer = SignupSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        with transaction.atomic():
-            user = User.objects.create_user(
-                phone_number=serializer.validated_data["phone_number"],
-                email=serializer.validated_data["email"],
-                password=serializer.validated_data["password"],
-            )
-            create_and_send_otp(user.email)
+        try:
+            with transaction.atomic():
+                user = User.objects.create_user(
+                    phone_number=serializer.validated_data["phone_number"],
+                    email=serializer.validated_data["email"],
+                    password=serializer.validated_data["password"],
+                )
+                create_and_send_otp(user.email)
+        except EmailDeliveryError:
+            # Rolls back the user + OTP so a retry starts clean.
+            return otp_delivery_unavailable()
         return Response(
             {"id": str(user.id), "email": user.email, "detail": "OTP sent to email."},
             status=status.HTTP_201_CREATED,
@@ -122,7 +147,11 @@ class OTPRequestView(APIView):
                 {"detail": "Too many OTP requests. Try again later."},
                 status=status.HTTP_429_TOO_MANY_REQUESTS,
             )
-        create_and_send_otp(email)
+        try:
+            with transaction.atomic():
+                create_and_send_otp(email)
+        except EmailDeliveryError:
+            return otp_delivery_unavailable()
         return Response({"detail": "OTP sent to email."})
 
 
