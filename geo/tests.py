@@ -1,5 +1,9 @@
 from datetime import date, time, datetime, timezone as dt_timezone
 from decimal import Decimal
+from io import StringIO
+import re
+
+from django.core.management import call_command
 from django.test import TestCase
 from rest_framework.test import APIClient
 from rest_framework_simplejwt.tokens import RefreshToken
@@ -143,3 +147,99 @@ class AdminCrudTests(TestCase):
             format="json",
         )
         self.assertEqual(res.status_code, 400)
+
+
+class SeedUyoTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        out = StringIO()
+        call_command("seed_uyo", stdout=out)
+        cls.first_report = out.getvalue()
+
+    def run_seed(self):
+        out = StringIO()
+        call_command("seed_uyo", stdout=out)
+        return out.getvalue()
+
+    @staticmethod
+    def counts(report):
+        return dict(
+            (label, (int(created), int(updated)))
+            for label, created, updated in re.findall(
+                r"^(\w+): created=(\d+) updated=(\d+)", report, re.MULTILINE
+            )
+        )
+
+    def test_seeds_expected_counts(self):
+        self.assertEqual(Corridor.objects.count(), 3)
+        self.assertEqual(Junction.objects.count(), 15)
+        self.assertEqual(RestrictedZone.objects.count(), 4)
+
+    def test_rerun_is_idempotent(self):
+        report = self.run_seed()
+        for label in ("corridors", "junctions", "zones"):
+            self.assertEqual(self.counts(report)[label], (0, 0), label)
+
+    def test_changed_coordinate_is_updated_in_place(self):
+        plaza = Junction.objects.get(name="Ibom Plaza")
+        junction_id = plaza.pk
+        plaza.latitude = Decimal("5.039000")
+        plaza.save(update_fields=["latitude"])
+
+        report = self.run_seed()
+        self.assertEqual(self.counts(report)["junctions"], (0, 1))
+        plaza = Junction.objects.get(pk=junction_id)
+        self.assertEqual(plaza.latitude, Decimal("5.038000"))
+
+    def test_all_coordinates_inside_akwa_ibom_bbox(self):
+        for junction in Junction.objects.all():
+            self.assertTrue(
+                inside_bbox(float(junction.latitude), float(junction.longitude)),
+                f"{junction.name} outside bbox",
+            )
+        for zone in RestrictedZone.objects.all():
+            lat, lng, radius = zone.coordinates["center"][0], zone.coordinates["center"][1], zone.coordinates["radius_m"]
+            self.assertTrue(inside_bbox(lat, lng), f"{zone.name} outside bbox")
+            self.assertGreater(radius, 0)
+
+    def test_junctions_on_a_corridor_are_spaced_apart(self):
+        for corridor in Corridor.objects.all():
+            points = list(
+                corridor.junctions.values_list("latitude", "longitude")
+            )
+            for i, a in enumerate(points):
+                for b in points[i + 1 :]:
+                    self.assertGreater(
+                        haversine_m(float(a[0]), float(a[1]), float(b[0]), float(b[1])),
+                        400,
+                        f"{corridor.name} junctions too close",
+                    )
+
+    def test_zones_reference_existing_junctions(self):
+        junction_ids = set(Junction.objects.values_list("id", flat=True))
+        for zone in RestrictedZone.objects.all():
+            self.assertIn(zone.junction_id, junction_ids, zone.name)
+
+    def test_closure_blocks_and_inactive_zone_does_not(self):
+        active = RestrictedZone.objects.filter(is_active=True)
+        blocked = find_blocking_zone(5.0330, 7.9300, active)
+        self.assertIsNotNone(blocked)
+        self.assertEqual(blocked.name, "Cover Road Culvert Works")
+        # The paused Mbono Uyo zone must not block even on top of itself.
+        self.assertIsNone(find_blocking_zone(5.0285, 7.8730, active))
+
+    def test_unknown_zone_junction_reference_is_rejected(self):
+        from django.core.management.base import CommandError
+
+        from .management.commands import seed_uyo
+
+        original = seed_uyo.ZONES
+        seed_uyo.ZONES = [
+            {**original[0], "name": "Bad ref", "junction": ("Nowhere Road", "Nope")}
+        ]
+        try:
+            with self.assertRaises(CommandError):
+                self.run_seed()
+        finally:
+            seed_uyo.ZONES = original
+        self.assertEqual(RestrictedZone.objects.count(), 4)

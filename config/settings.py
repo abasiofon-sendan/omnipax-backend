@@ -16,6 +16,13 @@ SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", "django-insecure-dev-only-chang
 DEBUG = os.environ.get("DJANGO_DEBUG", "1") == "1"
 ALLOWED_HOSTS = [h for h in os.environ.get("DJANGO_ALLOWED_HOSTS", "*").split(",") if h]
 
+# --- CORS ---
+# Auth is Bearer JWT in a header (no cookies/credentials), so the browser
+# sends nothing sensitive on cross-origin requests and any origin may call the
+# API — Vercel prod + preview URLs included without maintenance.
+CORS_ALLOW_ALL_ORIGINS = True
+CORS_ALLOW_CREDENTIALS = False
+
 INSTALLED_APPS = [
     "django.contrib.admin",
     "django.contrib.auth",
@@ -25,6 +32,7 @@ INSTALLED_APPS = [
     "django.contrib.staticfiles",
     # third-party
     "channels",
+    "corsheaders",
     "rest_framework",
     "rest_framework_simplejwt",
     "django_celery_beat",
@@ -41,6 +49,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    "corsheaders.middleware.CorsMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
